@@ -19,6 +19,10 @@ This project provides a minimal end-to-end example for fine-tuning a small langu
    ```bash
    bash runpod_job.sh
    ```
+5. Run before/after evaluation:
+   ```bash
+   bash runpod_eval.sh
+   ```
 
 ## Files
 - [train.py](train.py): trains a small causal LM with LoRA.
@@ -26,6 +30,7 @@ This project provides a minimal end-to-end example for fine-tuning a small langu
 - [data/eval_prompts.jsonl](data/eval_prompts.jsonl): held-out prompts for before/after comparison.
 - [evaluate_before_after.py](evaluate_before_after.py): generates side-by-side base vs fine-tuned outputs.
 - [runpod_job.sh](runpod_job.sh): entrypoint for RunPod.
+- [runpod_eval.sh](runpod_eval.sh): volume-aware before/after evaluation runner.
 - [Dockerfile](Dockerfile): optional container build for repeatable runs.
 
 ## Run fine-tuning
@@ -52,6 +57,18 @@ This writes:
 - `outputs/before_after_report.md`: human-readable side-by-side comparison table.
 - `outputs/before_after_outputs.jsonl`: raw generations for further analysis.
 
+On RunPod, use the helper script so report/output paths automatically go to your mounted volume:
+
+```bash
+bash runpod_eval.sh
+```
+
+If your mounted volume path is custom, set it first:
+
+```bash
+export RUNPOD_VOLUME_PATH=/your/mount/path
+```
+
 The report also includes a simple template-adherence score showing how often outputs match the target structure:
 
 `Diagnosis: ...` then `Fix:` with steps `1.` and `2.`
@@ -65,6 +82,7 @@ huggingface-cli login
 ```
 
 - Suggested GPU classes: RTX 4090, A100, H100, or other high-VRAM GPUs for faster runs.
+- To run evaluation automatically after training, set `RUN_EVAL_AFTER_TRAIN=1` before running `bash runpod_job.sh`.
 
 ## Notes
 - This remains a PoC workflow, but the dataset is now shaped to produce a visible behavior shift.
