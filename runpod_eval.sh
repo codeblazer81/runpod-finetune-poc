@@ -23,13 +23,19 @@ export PIP_CACHE_DIR="${STORAGE_ROOT}/.cache/pip"
 export TMPDIR="${STORAGE_ROOT}/tmp"
 
 OUTPUT_DIR="${STORAGE_ROOT}/runpod-finetune-outputs"
+MAX_EXAMPLES="${EVAL_MAX_EXAMPLES:-0}"
 
-python evaluate_before_after.py \
+echo "Using storage root: ${STORAGE_ROOT}"
+echo "Evaluation output dir: ${OUTPUT_DIR}"
+echo "EVAL_MAX_EXAMPLES=${MAX_EXAMPLES}"
+
+python -u evaluate_before_after.py \
   --base_model "meta-llama/Llama-3.1-8B-Instruct" \
   --adapter_path "${OUTPUT_DIR}" \
   --prompts_path data/eval_prompts.jsonl \
   --report_path "${OUTPUT_DIR}/before_after_report.md" \
-  --json_path "${OUTPUT_DIR}/before_after_outputs.jsonl"
+  --json_path "${OUTPUT_DIR}/before_after_outputs.jsonl" \
+  --max_examples "${MAX_EXAMPLES}"
 
 echo "Evaluation finished."
 echo "Report: ${OUTPUT_DIR}/before_after_report.md"

@@ -76,27 +76,37 @@ def main() -> None:
     parser.add_argument("--max_new_tokens", type=int, default=140)
     parser.add_argument("--temperature", type=float, default=0.0)
     parser.add_argument("--top_p", type=float, default=1.0)
+    parser.add_argument("--max_examples", type=int, default=0)
     args = parser.parse_args()
 
+    print("Loading evaluation prompts...", flush=True)
     prompts = load_jsonl(args.prompts_path)
     if not prompts:
         raise ValueError(f"No prompts found in {args.prompts_path}")
+    if args.max_examples > 0:
+        prompts = prompts[: args.max_examples]
+
+    print(f"Loaded {len(prompts)} prompt(s).", flush=True)
 
     report_path = Path(args.report_path)
     json_path = Path(args.json_path)
     report_path.parent.mkdir(parents=True, exist_ok=True)
     json_path.parent.mkdir(parents=True, exist_ok=True)
 
+    print(f"Loading tokenizer for {args.base_model}...", flush=True)
     tokenizer = AutoTokenizer.from_pretrained(args.base_model)
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
 
     dtype = torch.bfloat16 if torch.cuda.is_available() and torch.cuda.is_bf16_supported() else torch.float16 if torch.cuda.is_available() else torch.float32
+    print(f"Loading base model (dtype={dtype}, cuda={torch.cuda.is_available()})...", flush=True)
     model = AutoModelForCausalLM.from_pretrained(args.base_model, torch_dtype=dtype, device_map="auto")
     model.eval()
 
+    print("Generating BASE model outputs...", flush=True)
     rows = []
-    for item in prompts:
+    for idx, item in enumerate(prompts, start=1):
+        print(f"[base] {idx}/{len(prompts)}", flush=True)
         prompt = build_prompt(item["instruction"], item.get("input", ""))
         before = generate_response(
             model=model,
@@ -108,10 +118,13 @@ def main() -> None:
         )
         rows.append({"instruction": item["instruction"], "input": item.get("input", ""), "before": before})
 
+    print(f"Loading adapter from {args.adapter_path}...", flush=True)
     tuned_model = PeftModel.from_pretrained(model, args.adapter_path)
     tuned_model.eval()
 
-    for row in rows:
+    print("Generating FINE-TUNED model outputs...", flush=True)
+    for idx, row in enumerate(rows, start=1):
+        print(f"[tuned] {idx}/{len(rows)}", flush=True)
         prompt = build_prompt(row["instruction"], row["input"])
         after = generate_response(
             model=tuned_model,
@@ -126,10 +139,12 @@ def main() -> None:
     before_score = sum(adherence_score(r["before"]) for r in rows)
     after_score = sum(adherence_score(r["after"]) for r in rows)
 
+    print(f"Writing raw outputs to {json_path}...", flush=True)
     with open(json_path, "w", encoding="utf-8") as handle:
         for row in rows:
             handle.write(json.dumps(row, ensure_ascii=False) + "\n")
 
+    print(f"Writing markdown report to {report_path}...", flush=True)
     with open(report_path, "w", encoding="utf-8") as handle:
         handle.write("# Fine-tuning Before vs After\n\n")
         handle.write(f"Template adherence (higher is better): before={before_score}/{len(rows)}, after={after_score}/{len(rows)}\n\n")
