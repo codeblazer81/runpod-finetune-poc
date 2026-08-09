@@ -1,6 +1,5 @@
 import argparse
 import json
-import os
 from pathlib import Path
 
 import torch
@@ -21,9 +20,9 @@ def load_dataset(path: str):
 
 
 def format_example(row: dict) -> str:
-    instruction = row.get("instruction", "")
-    user_input = row.get("input", "").strip()
-    response = row.get("output", "")
+    instruction = str(row.get("instruction", ""))
+    user_input = str(row.get("input", "")).strip()
+    response = str(row.get("output", ""))
 
     if user_input:
         prompt = f"### Instruction:\n{instruction}\n\n### Input:\n{user_input}\n\n### Response:\n"
@@ -44,8 +43,11 @@ def main() -> None:
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    dataset = load_dataset(args.dataset_path)
-    dataset = dataset.map(lambda row: {"text": format_example(row)})
+    raw_dataset = load_dataset(args.dataset_path)
+    dataset = raw_dataset.map(
+        lambda row: {"text": format_example(row)},
+        remove_columns=raw_dataset.column_names,
+    )
 
     tokenizer = AutoTokenizer.from_pretrained(args.model_name)
     if tokenizer.pad_token is None:
@@ -78,7 +80,7 @@ def main() -> None:
         fp16=torch.cuda.is_available() and not torch.cuda.is_bf16_supported(),
         bf16=torch.cuda.is_available() and torch.cuda.is_bf16_supported(),
         report_to="none",
-        remove_unused_columns=False,
+        remove_unused_columns=True,
     )
 
     trainer = SFTTrainer(
