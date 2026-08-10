@@ -53,6 +53,14 @@ def generate_response(
     return text
 
 
+def trim_prompt_leak(text: str) -> str:
+    markers = ["### Instruction:", "### Input:", "### Response:"]
+    cut_points = [text.find(marker) for marker in markers if marker in text]
+    if cut_points:
+        text = text[: min(cut_points)].strip()
+    return text
+
+
 def format_for_markdown(text: str) -> str:
     return text.replace("\n", "<br>")
 
@@ -73,7 +81,7 @@ def main() -> None:
     parser.add_argument("--prompts_path", default="data/eval_prompts.jsonl")
     parser.add_argument("--report_path", default="outputs/before_after_report.md")
     parser.add_argument("--json_path", default="outputs/before_after_outputs.jsonl")
-    parser.add_argument("--max_new_tokens", type=int, default=140)
+    parser.add_argument("--max_new_tokens", type=int, default=96)
     parser.add_argument("--temperature", type=float, default=0.0)
     parser.add_argument("--top_p", type=float, default=1.0)
     parser.add_argument("--max_examples", type=int, default=0)
@@ -116,6 +124,7 @@ def main() -> None:
             temperature=args.temperature,
             top_p=args.top_p,
         )
+        before = trim_prompt_leak(before)
         rows.append({"instruction": item["instruction"], "input": item.get("input", ""), "before": before})
 
     print(f"Loading adapter from {args.adapter_path}...", flush=True)
@@ -134,6 +143,7 @@ def main() -> None:
             temperature=args.temperature,
             top_p=args.top_p,
         )
+        after = trim_prompt_leak(after)
         row["after"] = after
 
     before_score = sum(adherence_score(r["before"]) for r in rows)

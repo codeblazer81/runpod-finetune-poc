@@ -32,7 +32,7 @@ python train.py \
   --model_name "meta-llama/Llama-3.1-8B-Instruct" \
   --dataset_path data/train.jsonl \
   --output_dir "${OUTPUT_DIR}" \
-  --epochs 1
+  --epochs 3
 
 echo "Training finished."
 echo "To run before/after evaluation: bash runpod_eval.sh"

@@ -19,7 +19,7 @@ def load_dataset(path: str):
     return Dataset.from_list(rows)
 
 
-def format_example(row: dict) -> str:
+def format_example(row: dict, eos_token: str) -> str:
     instruction = str(row.get("instruction", ""))
     user_input = str(row.get("input", "")).strip()
     response = str(row.get("output", ""))
@@ -29,7 +29,8 @@ def format_example(row: dict) -> str:
     else:
         prompt = f"### Instruction:\n{instruction}\n\n### Response:\n"
 
-    return prompt + response
+    # Appending EOS helps the model learn where to stop and reduces prompt leakage.
+    return prompt + response.strip() + eos_token
 
 
 def main() -> None:
@@ -37,21 +38,23 @@ def main() -> None:
     parser.add_argument("--model_name", default="meta-llama/Llama-3.1-8B-Instruct")
     parser.add_argument("--dataset_path", default="data/train.jsonl")
     parser.add_argument("--output_dir", default="outputs")
-    parser.add_argument("--epochs", type=int, default=1)
+    parser.add_argument("--epochs", type=int, default=3)
     args = parser.parse_args()
 
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    raw_dataset = load_dataset(args.dataset_path)
-    dataset = raw_dataset.map(
-        lambda row: {"text": format_example(row)},
-        remove_columns=raw_dataset.column_names,
-    )
-
     tokenizer = AutoTokenizer.from_pretrained(args.model_name)
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
+
+    raw_dataset = load_dataset(args.dataset_path)
+    eos_token = tokenizer.eos_token or ""
+    dataset = raw_dataset.map(
+        lambda row: {"text": format_example(row, eos_token)},
+        remove_columns=raw_dataset.column_names,
+    )
+    print(f"Loaded {len(dataset)} training examples.")
 
     model = AutoModelForCausalLM.from_pretrained(
         args.model_name,
@@ -60,12 +63,12 @@ def main() -> None:
     )
 
     lora_config = LoraConfig(
-        r=8,
-        lora_alpha=16,
+        r=16,
+        lora_alpha=32,
         lora_dropout=0.05,
         bias="none",
         task_type="CAUSAL_LM",
-        target_modules=["q_proj", "v_proj"],
+        target_modules=["q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "up_proj", "down_proj"],
     )
 
     training_args = TrainingArguments(
